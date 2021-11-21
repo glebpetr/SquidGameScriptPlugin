@@ -1,0 +1,283 @@
+options: 
+	version: v1.0-gamerelease
+	prefix: &cSquidGame &8[&7»&8]
+	maxplayers: 10
+	minplayers: 1
+	gametimer: 60 # Секунды
+	lobbycountdown: 10 # Секунды
+on load:
+	reset()
+function reset():
+	loop {spectator::*}:
+		disallow flight to loop-value
+		remove invisibility from "%loop-value%" parsed as player
+	teleport {ingame::*} to {lobby}
+	set {canmove} to true
+	delete {winners::*}
+	set {checking} to false
+	delete {spectator::*}
+	
+function resetnowin():
+	loop {spectator::*}:
+		disallow flight to loop-value
+		remove invisibility from "%loop-value%" parsed as player
+	teleport {ingame::*} to {lobby}
+	set {isgamestarted} to false
+	set {canmove} to true
+	set {checking} to false
+	delete {notarrived::*}
+	delete {winners::*}
+	delete {spectator::*}
+	delete {ingame::*}
+# Таб -- я хз как его сделать
+on tab complete of "/squidadmin":
+	set tab completions for position 1 to "reload", "setlobby", "help", "setspawn", "version", "setwaitinglobby" 
+on tab complete of "/squidgame":
+	set tab completions for position 1 to "help", "join", "leave"
+# команды админа
+command squidadmin [<text>]:
+	permission: squidgame.admin
+	permission message: {@prefix} &cСлышь собака у тебя прав нет
+	trigger:
+		if arg 1 = "version":
+			send "{@prefix} &7версия плагина &b{@version} &7от SkriptMaker"
+		if arg 1 = "reload":
+			send "{@prefix} &7Перезапуск..." 
+			reload script "squidgame"
+			send "{@prefix} &7Перезагружен!" 
+		if arg 1 = "setlobby":
+			set {lobby} to player's location
+			send "{@prefix} &6Лобби поставлена на &a%player's location%"
+		if arg 1 = "setspawn1":
+			set {spawn.game1} to player's location
+			send "{@prefix} &bСпавн 1 Игры Был поставлен на %player's location%"
+		if arg 1 = "setwaitinglobby":
+			set {waitinglobby} to player's location
+			send "{@prefix} &bМесто ожидания был поставлено на &a%player's location%"
+		if arg-1 = "setspawn2":
+			set {spawn.game2} to player's location
+			send "{@prefix} &bСпавн 2 Игры Был поставлен на %player's location%"
+# Команды игрока
+command squidgame [<text>]:
+	trigger:
+		if arg 1 = "join":
+			if {isgamestarted} is true:
+				send "{@prefix} &7Игра уже началась"
+			else:
+				if {ingame::*} contains player:
+					send "{@prefix} &7Лол, ты уже в игре"
+				else:
+					if size of {ingame::*} < {@maxplayers}:
+						add player to {ingame::*}
+						teleport the player to {waitinglobby}
+						send "{@prefix} &e%player% &7Зашел! &8(&a%size of {ingame::*}%&7/&a{@maxplayers}&8)" to {ingame::*}
+						checkplayers()
+					else:
+						send "{@prefix} &7Игроков слишком много что-бы зайти"
+		if arg 1 = "leave":
+			if {ingame::*} contains player:
+				teleport the player to {lobby}
+				send "{@prefix} &e%player% &7Вышел! &8(&a%size of {ingame::*} - 1%&7/&a{@maxplayers}&8)" to {ingame::*}
+				remove player from {ingame::*}
+				remove player from {notarrived::*}
+				remove player from {winners::*}
+				remove player from {spectator::*}
+			else:
+				send "{@prefix}%{notingame}%"
+# Выйти при выходе из игры -- хз как обьяснить
+on disconnect:
+	if {ingame::*} contains player:
+		send "{@prefix} &e%player% &7Вышел из игры! &8(&a%size of {ingame::*} - 1%&7/&a{@maxplayers}&8)" to {ingame::*}
+		if {spectator::*} contains player:
+			disallow flight to player
+			remove invisibility from player
+		remove player from {ingame::*}
+		remove player from {notarrived::*}
+		remove player from {winners::*}
+		remove player from {spectator::*}
+# ИГРА
+on player move:
+	if {canmove} is false:
+		if {notarrived::*} contains player:
+			remove player from {notarrived::*}
+			send "{@prefix} &c%player% &7Выбыл!" to {ingame::*}
+			send title "&c&lвыбыл!" with subtitle "&7Ты двигался!!" to player for 5 seconds
+			add player to {spectator::*}
+			apply invisibility to the player for 1 days
+			allow flight to event-player
+on walking on wool:
+	if {notarrived::*} contains player:
+		remove player from {notarrived::*}
+		add player to {winners::*}
+		send "{@prefix} &a%player% &7Этот игрок маг! Он победил!" to {ingame::*}
+		teleport player to {lobby}
+		send "{@prefix} &aПока что вы можете поспать" to player
+# автоматическое начало игры
+function checkplayers():
+	if size of {ingame::*} >= {@minplayers}:
+		if {checking} is false:
+			set {checking} to true
+			set {countdown} to {@lobbycountdown}
+			loop {@lobbycountdown} times:
+				if size of {ingame::*} >= {@minplayers}:
+					if {countdown} = 30:
+						send "{@prefix} &7Начало в &a%{countdown}% &7Секунд!" to {ingame::*}
+					if {countdown} = 20:
+						send "{@prefix} &7Начало в &a%{countdown}% &7Секунд!" to {ingame::*}
+					if {countdown} = 10:
+						send "{@prefix} &7Начало в &a%{countdown}% &7Секунд!" to {ingame::*}
+					if {countdown} < 6:
+						send "{@prefix} &7Игра начнется в &a%{countdown}% &7секунд!" to {ingame::*}
+					remove 1 from {countdown}
+					wait 1 second
+				else:
+					set {checking} to false
+					send "{@prefix} &c{@minplayers} &7Нужно минимально для начала!" to {ingame::*}
+					stop loop
+				if {countdown} is 0:
+					send "{@prefix} &7Игра началась!" to {ingame::*}
+					set {checking} to false
+					startgame1()
+	else if size of {ingame::*} < {@minplayers}:
+		set {checking} to false
+function startgame1():
+	set {isgamestarted} to true
+	set {canmove} to true
+	set {timer} to {@gametimer}
+	set {notarrived::*} to {ingame::*}
+	send "" to {ingame::*}
+	send "                        &c&lИГРА В КАЛЬМАРА" to {ingame::*}
+	send "" to {ingame::*}
+	send "            &7Добро Пожаловать в игру &cКрасный Свет&7, &aЗеленый Свет&7!" to {ingame::*}
+	send "&7Ты можешь только двигаться на зеленом свету, если ты будешь двигаться когда" to {ingame::*}
+	send "   &7Красный Свет, то ты выбыл!!" to {ingame::*}
+	send "" to {ingame::*}
+	wait 5 seconds
+	teleport {ingame::*} to {spawn.game1}
+	timer()
+	while {isgamestarted} = true:
+		if size of {notarrived::*} > 0:
+			if {timer} > 0:
+				set {canmove} to true
+				play sound "entity_experience_orb_pickup" to {ingame::*}
+				send title "&a?" with subtitle "&a&lЗеленый!" to {notarrived::*}
+				set {_random} to a random integer between 3 and 6
+				wait "%{_random}% seconds" parsed as timespan
+				play sound "block_anvil_land" to {ingame::*}
+				send title "&c?" with subtitle "&c&lКрасный" to {notarrived::*}
+				wait 15 ticks
+				set {canmove} to false
+				set {_random} to a random integer between 3 and 6
+				wait "%{_random}% seconds" parsed as timespan
+				set {isgamestarted} to false
+			else if {timer} = 0:
+				send "{@prefix} &7Время вышло! &cИгра закончена" to {ingame::*}
+				send "{@prefix} &7Все выжили или умерли." to {ingame::*}
+				send title "&c&lВыбыл!" with subtitle "&7Время вышло" to {notarrived::*} for 5 seconds
+				reset()
+				startgame2()
+				set {isgamestarted} to false
+		else:
+			if size of {winners::*} = 0:
+				send "{@prefix} &7Никто не выжил. Попробуйте сново попытать удачу" to {ingame::*}
+				resetnowin()
+				set {isgamestarted} to false
+			if size of {winners::*} > 0:
+				send "{@prefix} &cВсе выжили или умерли." to {ingame::*}
+				reset()
+				startgame2()
+				set {isgamestarted} to false
+				
+function startgame2():
+	set {isgamestarted} to true
+	set {timer} to {@gametimer}
+	set {notarrived::*} to {ingame::*}
+	send "" to {ingame::*}
+	send "                        &c&lСУДНАЯ НОЧЬ" to {ingame::*}
+	send "" to {ingame::*}
+	send "            &7Все хотят денег.. Начинается резня!" to {ingame::*}
+	send "" to {ingame::*}
+	wait 5 seconds
+	teleport {ingame::*} to {lobby}
+	timer()
+	if {isgamestarted} = true:
+		if size of {notarrived::*} > 0:
+			if {timer} > 0:
+				send title "Вы сможете драться" with subtitle "через &a3" to {notarrived::*}
+				wait 1 second
+				send title "Вы сможете драться" with subtitle "через &a2" to {notarrived::*}
+				wait 1 second
+				send title "Вы сможете драться" with subtitle "через &a1" to {notarrived::*}
+				wait 1 second
+				send title "ВЫ МОЖЕТЕ ДРАТЬСЯ!" to {notarrived::*}
+				wait 1 second
+				execute console command "rg flag spawn pvp allow"
+				give a stick to the player
+			if {timer} < 0:
+				execute console command "rg flag spawn pvp deny"
+				remove 1 stick from the player
+				send title "Судная ночь закончилась" to {notarrived::*}
+				reset()
+				
+function timer():
+	while {isgamestarted} = true:
+		if {timer} > 0:
+			send action bar "&7Осталось: &b%{timer}%s" to {ingame::*}
+			set {timer} to {timer} - 1
+			wait 1 seconds
+			
+on death:
+	remove player from {notarrived::*}
+	add player to {spectator::*}
+	apply invisibility to the player for 1 days
+	allow flight to event-player
+	send title "&c&lВы погибли..!" with subtitle "&7Вас убили" to player for 5 seconds
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+
+
+
+
+
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+		
+
+
+
+	
+	
+		
+		
